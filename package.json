@@ -1,0 +1,21 @@
+{
+  "name": "growth-lab",
+  "version": "0.1.0",
+  "description": "Fully dynamic to-do tracker with NestJS backend and Next.js frontend",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix frontend\" \"npm run start:dev --prefix backend\"",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm run start:dev --prefix backend",
+    "build": "npm run build --prefix frontend && npm run build --prefix backend",
+    "build:frontend": "npm run build --prefix frontend",
+    "build:backend": "npm run build --prefix backend",
+    "start": "concurrently \"npm run start --prefix frontend\" \"npm run start --prefix backend\"",
+    "start:frontend": "npm run start --prefix frontend",
+    "start:backend": "npm run start --prefix backend",
+    "install:all": "npm install && npm install --prefix frontend && npm install --prefix backend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
