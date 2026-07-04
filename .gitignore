@@ -31,9 +31,12 @@ yarn-error.log*
 /coverage
 
 # Next.js / frontend
-/.next/
-/out/
-/.vercel
+.next/
+out/
+.vercel
+**/.next/
+**/out/
+frontend/.next/
 next-env.d.ts
 
 # Build / production artifacts
