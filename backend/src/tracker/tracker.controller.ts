@@ -12,18 +12,20 @@ export class TrackerController {
     @Get()
     async getDatabase(@Req() req: Request, @Res() res: Response) {
         const token = req.cookies[SESSION_COOKIE_NAME];
-        if (!token || !this.authService.verifyToken(token)) {
+        const payload = token ? this.authService.verifyToken(token) : null;
+        if (!payload) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
 
-        const data = await this.trackerService.getAll();
+        const data = await this.trackerService.getAll(payload.userId);
         return res.json(data);
     }
 
     @Post()
     async postDatabase(@Req() req: Request, @Res() res: Response, @Body() body: any) {
         const token = req.cookies[SESSION_COOKIE_NAME];
-        if (!token || !this.authService.verifyToken(token)) {
+        const payload = token ? this.authService.verifyToken(token) : null;
+        if (!payload) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
 
@@ -33,7 +35,7 @@ export class TrackerController {
         }
 
         try {
-            const result = await this.trackerService.performAction(collection, action, item);
+            const result = await this.trackerService.performAction(payload.userId, collection, action, item);
             return res.json(result);
         } catch (error: any) {
             return res.status(400).json({ error: error?.message || 'Invalid request' });

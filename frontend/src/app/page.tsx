@@ -23,13 +23,22 @@ export default function Home() {
 
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [isDefaultPassword, setIsDefaultPassword] = useState(false);
-  const [loginUsername, setLoginUsername] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // Registration State
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState('');
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showRegisterConfirmPassword, setShowRegisterConfirmPassword] = useState(false);
+  const [isSigningUp, setIsSigningUp] = useState(false);
 
   // App Navigation and Data State
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -45,6 +54,38 @@ export default function Home() {
     diary: []
   });
 
+  // Background Image State
+  const [bgImage, setBgImage] = useState<string | null>(null);
+
+  // Apply bgImage updates to document.body style
+  useEffect(() => {
+    const saved = localStorage.getItem('app-bg-image');
+    if (saved) {
+      setBgImage(saved);
+      document.body.style.backgroundImage = `url(${saved})`;
+      document.body.style.backgroundSize = 'cover';
+      document.body.style.backgroundAttachment = 'fixed';
+      document.body.style.backgroundPosition = 'center';
+    }
+  }, []);
+
+  const handleUpdateBgImage = (image: string | null) => {
+    setBgImage(image);
+    if (image) {
+      localStorage.setItem('app-bg-image', image);
+      document.body.style.backgroundImage = `url(${image})`;
+      document.body.style.backgroundSize = 'cover';
+      document.body.style.backgroundAttachment = 'fixed';
+      document.body.style.backgroundPosition = 'center';
+    } else {
+      localStorage.removeItem('app-bg-image');
+      document.body.style.backgroundImage = '';
+      document.body.style.backgroundSize = '';
+      document.body.style.backgroundAttachment = '';
+      document.body.style.backgroundPosition = '';
+    }
+  };
+
   // Verify Auth on mount
   useEffect(() => {
     checkAuth();
@@ -57,7 +98,7 @@ export default function Home() {
         const data = await res.json();
         if (data.authenticated) {
           setIsAuthenticated(true);
-          setUsername(data.username);
+          setEmail(data.email);
           setIsDefaultPassword(data.isDefaultPassword || false);
           fetchDbData();
         } else {
@@ -91,21 +132,20 @@ export default function Home() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
-    if (!loginUsername || !loginPassword) return;
+    if (!loginEmail || !loginPassword) return;
 
     setIsLoggingIn(true);
     try {
       const res = await apiFetch('/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: loginUsername, password: loginPassword })
+        body: JSON.stringify({ email: loginEmail, password: loginPassword })
       });
 
       if (res.ok) {
         const data = await res.json();
         setIsAuthenticated(true);
-        setUsername(data.username);
-        // Refresh auth profile check to retrieve password warning state
+        setEmail(data.email);
         await checkAuth();
       } else {
         const err = await res.json();
@@ -118,11 +158,49 @@ export default function Home() {
     }
   };
 
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    if (!registerEmail || !registerPassword || !registerConfirmPassword) return;
+
+    if (registerPassword !== registerConfirmPassword) {
+      setAuthError('Passwords do not match.');
+      return;
+    }
+
+    setIsSigningUp(true);
+    try {
+      const res = await apiFetch('/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: registerEmail, password: registerPassword })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setIsAuthenticated(true);
+        setEmail(data.email);
+        setRegisterEmail('');
+        setRegisterPassword('');
+        setRegisterConfirmPassword('');
+        setIsRegistering(false);
+        await checkAuth();
+      } else {
+        const err = await res.json();
+        setAuthError(err.error || 'Registration failed. Please try again.');
+      }
+    } catch (err) {
+      setAuthError('Unable to connect to authentication service.');
+    } finally {
+      setIsSigningUp(false);
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await apiFetch('/auth/logout', { method: 'POST' });
       setIsAuthenticated(false);
-      setUsername('');
+      setEmail('');
       setIsDefaultPassword(false);
       setDbData({ targets: [], personality: [], books: [], diary: [] });
       setActiveTab('dashboard');
@@ -131,12 +209,12 @@ export default function Home() {
     }
   };
 
-  const handleDbAction = async (action: 'create' | 'update' | 'delete', item: any) => {
+  const handleDbAction = async (action: 'create' | 'update' | 'delete', item: any, targetCollection?: string) => {
     try {
       const res = await apiFetch('/db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, collection: activeTab, item })
+        body: JSON.stringify({ action, collection: targetCollection || activeTab, item })
       });
 
       if (res.ok) {
@@ -177,7 +255,7 @@ export default function Home() {
     }
   };
 
-  const handleUpdateProfile = async (payload: { currentPassword: string; newPassword?: string; newUsername?: string }) => {
+  const handleUpdateProfile = async (payload: { currentPassword: string; newPassword?: string; newEmail?: string }) => {
     try {
       const res = await apiFetch('/auth/profile', {
         method: 'POST',
@@ -187,7 +265,7 @@ export default function Home() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setUsername(data.username);
+        setEmail(data.email);
         // Refresh default password check
         await checkAuth();
         return { success: true };
@@ -223,70 +301,212 @@ export default function Home() {
             <Sparkles size={32} style={{ display: 'inline', marginRight: '0.5rem', verticalAlign: 'middle' }} />
             <span>GROWTH LAB</span>
           </div>
-          <p className="login-subtitle">Secured, Fully Encrypted Personal Progression Space</p>
+          <p className="login-subtitle">
+            {isRegistering ? 'Start Your Personal Progression Journey' : 'Secured, Fully Encrypted Personal Progression Space'}
+          </p>
 
-          {authError && <div className="error-message" id="login-error-msg">{authError}</div>}
+          {authError && <div className="error-message" id="login-error-msg" style={{ color: 'var(--accent-paused)', marginBottom: '1rem', fontSize: '0.875rem' }}>{authError}</div>}
 
-          <form onSubmit={handleLogin}>
-            <div className="form-group">
-              <label className="form-label" htmlFor="login-username">Admin Username</label>
-              <input
-                id="login-username"
-                type="text"
-                className="form-input"
-                placeholder="E.g., Abhimanyu"
-                required
-                value={loginUsername}
-                onChange={(e) => setLoginUsername(e.target.value)}
-                disabled={isLoggingIn}
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label" htmlFor="login-password">Password</label>
-              <div style={{ position: 'relative' }}>
+          {isRegistering ? (
+            <form onSubmit={handleRegister}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="register-email">Email Address</label>
                 <input
-                  id="login-password"
-                  type={showPassword ? 'text' : 'password'}
+                  id="register-email"
+                  type="email"
                   className="form-input"
-                  placeholder="Enter secure password"
+                  placeholder="E.g., abhimanyu@gmail.com"
                   required
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  disabled={isLoggingIn}
-                  style={{ paddingRight: '2.5rem' }}
+                  value={registerEmail}
+                  onChange={(e) => setRegisterEmail(e.target.value)}
+                  disabled={isSigningUp}
                 />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="register-password">Password</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    id="register-password"
+                    type={showRegisterPassword ? 'text' : 'password'}
+                    className="form-input"
+                    placeholder="Enter secure password"
+                    required
+                    value={registerPassword}
+                    onChange={(e) => setRegisterPassword(e.target.value)}
+                    disabled={isSigningUp}
+                    style={{ paddingRight: '2.5rem' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-dark)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                  >
+                    {showRegisterPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="register-confirm-password">Confirm Password</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    id="register-confirm-password"
+                    type={showRegisterConfirmPassword ? 'text' : 'password'}
+                    className="form-input"
+                    placeholder="Re-enter password"
+                    required
+                    value={registerConfirmPassword}
+                    onChange={(e) => setRegisterConfirmPassword(e.target.value)}
+                    disabled={isSigningUp}
+                    style={{ paddingRight: '2.5rem' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRegisterConfirmPassword(!showRegisterConfirmPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-dark)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                  >
+                    {showRegisterConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                id="register-submit-btn"
+                type="submit"
+                className="btn"
+                disabled={isSigningUp}
+                style={{ marginTop: '1rem' }}
+              >
+                {isSigningUp ? 'Creating Account...' : 'Sign Up & Register'}
+              </button>
+
+              <div style={{ marginTop: '1.5rem', fontSize: '0.9rem' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Already have an account? </span>
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => {
+                    setIsRegistering(false);
+                    setAuthError('');
+                  }}
                   style={{
-                    position: 'absolute',
-                    right: '10px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
                     background: 'transparent',
                     border: 'none',
-                    color: 'var(--text-dark)',
+                    color: 'var(--accent-primary)',
                     cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center'
+                    textDecoration: 'underline',
+                    fontWeight: 600
                   }}
                 >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  Log In
                 </button>
               </div>
-            </div>
+            </form>
+          ) : (
+            <form onSubmit={handleLogin}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="login-email">Email Address</label>
+                <input
+                  id="login-email"
+                  type="email"
+                  className="form-input"
+                  placeholder="E.g., abhimanyu@gmail.com"
+                  required
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  disabled={isLoggingIn}
+                />
+              </div>
 
-            <button
-              id="login-submit-btn"
-              type="submit"
-              className="btn"
-              disabled={isLoggingIn}
-              style={{ marginTop: '1rem' }}
-            >
-              {isLoggingIn ? 'Decrypting Vault...' : 'Access Tracker'}
-            </button>
-          </form>
+              <div className="form-group">
+                <label className="form-label" htmlFor="login-password">Password</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    id="login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    className="form-input"
+                    placeholder="Enter secure password"
+                    required
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    disabled={isLoggingIn}
+                    style={{ paddingRight: '2.5rem' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-dark)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                id="login-submit-btn"
+                type="submit"
+                className="btn"
+                disabled={isLoggingIn}
+                style={{ marginTop: '1rem' }}
+              >
+                {isLoggingIn ? 'Decrypting Vault...' : 'Access Tracker'}
+              </button>
+
+              <div style={{ marginTop: '1.5rem', fontSize: '0.9rem' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Don't have an account? </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRegistering(true);
+                    setAuthError('');
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--accent-primary)',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    fontWeight: 600
+                  }}
+                >
+                  Sign Up
+                </button>
+              </div>
+            </form>
+          )}
 
           <div style={{ marginTop: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: 'var(--text-dark)', fontSize: '0.75rem' }}>
             <Lock size={12} />
@@ -303,7 +523,7 @@ export default function Home() {
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        username={username}
+        email={email}
         onLogout={handleLogout}
       />
 
@@ -316,6 +536,7 @@ export default function Home() {
             diary={dbData.diary}
             setActiveTab={setActiveTab}
             showPasswordWarning={isDefaultPassword}
+            onAction={handleDbAction}
           />
         )}
 
@@ -350,8 +571,10 @@ export default function Home() {
 
         {activeTab === 'settings' && (
           <Settings
-            username={username}
+            email={email}
             onUpdateProfile={handleUpdateProfile}
+            bgImage={bgImage}
+            onUpdateBgImage={handleUpdateBgImage}
           />
         )}
       </main>

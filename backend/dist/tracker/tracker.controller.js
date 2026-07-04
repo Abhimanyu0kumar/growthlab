@@ -24,15 +24,17 @@ let TrackerController = class TrackerController {
     }
     async getDatabase(req, res) {
         const token = req.cookies[SESSION_COOKIE_NAME];
-        if (!token || !this.authService.verifyToken(token)) {
+        const payload = token ? this.authService.verifyToken(token) : null;
+        if (!payload) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
-        const data = await this.trackerService.getAll();
+        const data = await this.trackerService.getAll(payload.userId);
         return res.json(data);
     }
     async postDatabase(req, res, body) {
         const token = req.cookies[SESSION_COOKIE_NAME];
-        if (!token || !this.authService.verifyToken(token)) {
+        const payload = token ? this.authService.verifyToken(token) : null;
+        if (!payload) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
         const { action, collection, item } = body;
@@ -40,7 +42,7 @@ let TrackerController = class TrackerController {
             return res.status(400).json({ error: 'Missing parameters: action, collection, and item are required' });
         }
         try {
-            const result = await this.trackerService.performAction(collection, action, item);
+            const result = await this.trackerService.performAction(payload.userId, collection, action, item);
             return res.json(result);
         }
         catch (error) {

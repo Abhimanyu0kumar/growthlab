@@ -23,26 +23,34 @@ let AuthService = class AuthService {
     constructor(db) {
         this.db = db;
     }
-    async validateCredentials(username, password) {
-        const admin = await this.db.getAdmin();
-        if (!admin)
-            return false;
-        if (admin.username.toLowerCase() !== username.toLowerCase())
-            return false;
-        return bcryptjs_1.default.compareSync(password, admin.passwordHash);
+    async validateCredentials(email, password) {
+        const user = await this.db.getUserByEmail(email);
+        if (!user)
+            return null;
+        const isPasswordValid = bcryptjs_1.default.compareSync(password, user.passwordHash);
+        return isPasswordValid ? user : null;
     }
     async getAdmin() {
         return this.db.getAdmin();
     }
-    async updateProfile(username, passwordHash) {
-        return this.db.saveAdmin(username, passwordHash);
+    async getUserById(userId) {
+        return this.db.getUserById(userId);
+    }
+    async getUserByEmail(email) {
+        return this.db.getUserByEmail(email);
+    }
+    async createUser(email, passwordHash) {
+        return this.db.createUser(email, passwordHash);
+    }
+    async updateProfile(userId, email, passwordHash) {
+        return this.db.updateUserProfile(userId, email, passwordHash);
     }
     async hashPassword(password) {
         return this.db.hashPassword(password);
     }
-    createToken(username) {
+    createToken(userId, email) {
         const expiresAt = Date.now() + SESSION_EXPIRY_MS;
-        const payload = { username, expiresAt };
+        const payload = { userId, email, expiresAt };
         const serialized = JSON.stringify(payload);
         const iv = crypto_1.default.randomBytes(12);
         const key = crypto_1.default.createHash('sha256').update(SESSION_SECRET).digest();

@@ -17,6 +17,10 @@ export default function Personality({ personality = [], onAction }: PersonalityP
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   
+  // Filter States
+  const [statusFilter, setStatusFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
+
   // View Modes: standard tab grid vs daily sidebar breakdown
   const [viewMode, setViewMode] = useState<'standard' | 'days'>('days');
   const todayStr = new Date().toISOString().split('T')[0];
@@ -27,6 +31,7 @@ export default function Personality({ personality = [], onAction }: PersonalityP
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<'in_progress' | 'paused' | 'completed' | 'incomplete'>('in_progress');
+  const [color, setColor] = useState<'green' | 'red'>('green');
   const [createdAtDate, setCreatedAtDate] = useState<string>(todayStr);
 
   // Filter personality items
@@ -35,7 +40,9 @@ export default function Personality({ personality = [], onAction }: PersonalityP
     const matchesSearch = 
       p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
       p.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesTab && matchesSearch;
+    const matchesStatus = statusFilter ? p.status === statusFilter : true;
+    const matchesDate = dateFilter ? p.createdAt.split('T')[0] === dateFilter : true;
+    return matchesTab && matchesSearch && matchesStatus && matchesDate;
   });
 
   // Group items by creation date
@@ -90,6 +97,7 @@ export default function Personality({ personality = [], onAction }: PersonalityP
     setTitle('');
     setDescription('');
     setStatus('in_progress');
+    setColor('green');
     setCreatedAtDate(selectedDate);
     setIsModalOpen(true);
   };
@@ -100,6 +108,7 @@ export default function Personality({ personality = [], onAction }: PersonalityP
     setTitle(item.title);
     setDescription(item.description);
     setStatus(item.status);
+    setColor(item.color || 'green');
     setCreatedAtDate(item.createdAt.split('T')[0]);
     setIsModalOpen(true);
   };
@@ -124,6 +133,7 @@ export default function Personality({ personality = [], onAction }: PersonalityP
         title: title.trim(),
         description: description.trim(),
         status,
+        color,
         createdAt: finalCreatedAt
       });
     } else if (modalMode === 'edit' && currentItemId) {
@@ -133,6 +143,7 @@ export default function Personality({ personality = [], onAction }: PersonalityP
         title: title.trim(),
         description: description.trim(),
         status,
+        color,
         createdAt: finalCreatedAt
       });
     }
@@ -170,8 +181,9 @@ export default function Personality({ personality = [], onAction }: PersonalityP
 
   const renderItemCard = (item: PersonalityItem) => {
     const isCompleted = item.status === 'completed';
+    const isBad = item.color === 'red';
     return (
-      <div key={item.id} className="glass-panel item-card">
+      <div key={item.id} className={`glass-panel item-card ${isBad ? 'card-border-bad' : 'card-border-good'}`}>
         {/* Subtle top-right actions shown on card hover */}
         <div className="card-hover-actions">
           <button
@@ -206,6 +218,9 @@ export default function Personality({ personality = [], onAction }: PersonalityP
           </div>
           <span className={`item-title ${isCompleted ? 'completed' : ''}`}>
             {item.title}
+          </span>
+          <span className={`badge ${isBad ? 'badge-bad' : 'badge-good'}`} style={{ flexShrink: 0, marginRight: '0.5rem' }}>
+            {isBad ? 'To Leave' : 'To Flow'}
           </span>
           <span className={getStatusBadgeClass(item.status)} style={{ flexShrink: 0 }}>
             {getStatusLabel(item.status)}
@@ -279,18 +294,63 @@ export default function Personality({ personality = [], onAction }: PersonalityP
           ))}
         </div>
 
-        {/* Search controls */}
-        <div className="list-controls">
-          <div className="search-input-wrapper">
-            <Search size={18} />
-            <input
-              id="personality-search-input"
-              type="text"
-              className="form-input"
-              placeholder={`Search in ${getSubTabLabel(activeSubTab)}...`}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+        {/* Search and Filter controls */}
+        <div className="list-controls" style={{ flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flex: 1, flexWrap: 'wrap' }}>
+            <div className="search-input-wrapper" style={{ maxWidth: '320px', flex: 1 }}>
+              <Search size={18} />
+              <input
+                id="personality-search-input"
+                type="text"
+                className="form-input"
+                placeholder={`Search in ${getSubTabLabel(activeSubTab)}...`}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <select
+                id="personality-filter-status"
+                className="form-input"
+                style={{ width: '150px', height: '42px', padding: '0 0.75rem' }}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="">All Statuses</option>
+                <option value="in_progress">In Progress</option>
+                <option value="paused">Paused</option>
+                <option value="completed">Completed</option>
+                <option value="incomplete">Incomplete</option>
+              </select>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Date:</span>
+                <input
+                  id="personality-filter-date"
+                  type="date"
+                  className="form-input"
+                  style={{ width: '160px', height: '42px', padding: '0 0.75rem' }}
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                />
+              </div>
+
+              {(statusFilter || dateFilter || searchQuery) && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ width: 'auto', height: '42px', padding: '0 1.25rem', display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}
+                  onClick={() => {
+                    setStatusFilter('');
+                    setDateFilter('');
+                    setSearchQuery('');
+                  }}
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -414,18 +474,6 @@ export default function Personality({ personality = [], onAction }: PersonalityP
               </div>
 
               <div className="form-group">
-                <label className="form-label" htmlFor="personality-form-date">Practice Date</label>
-                <input
-                  id="personality-form-date"
-                  type="date"
-                  className="form-input"
-                  required
-                  value={createdAtDate}
-                  onChange={(e) => setCreatedAtDate(e.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
                 <label className="form-label" htmlFor="personality-form-desc">Actionable Guidelines & Notes</label>
                 <textarea
                   id="personality-form-desc"
@@ -435,6 +483,19 @@ export default function Personality({ personality = [], onAction }: PersonalityP
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                 />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="personality-form-color">Type / Sentiment</label>
+                <select
+                  id="personality-form-color"
+                  className="form-input"
+                  value={color}
+                  onChange={(e) => setColor(e.target.value as any)}
+                >
+                  <option value="green">Good / To Flow (Green)</option>
+                  <option value="red">Bad / To Avoid/Leave (Red)</option>
+                </select>
               </div>
 
               <div className="form-group">

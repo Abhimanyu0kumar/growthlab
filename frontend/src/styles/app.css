@@ -455,7 +455,7 @@ body {
 /* Grid & Content Panels */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 1.5rem;
 }
 
@@ -736,6 +736,27 @@ body {
   color: #f87171;
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
+
+.badge-good {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.badge-bad {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.card-border-good {
+  border-left: 4px solid var(--accent-success) !important;
+}
+
+.card-border-bad {
+  border-left: 4px solid var(--accent-paused) !important;
+}
+
 
 /* Modal and Forms */
 .modal-overlay {

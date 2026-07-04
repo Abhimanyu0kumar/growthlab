@@ -52,6 +52,12 @@ let DatabaseService = class DatabaseService {
             await adminPool.end();
         }
     }
+    async addUserIdColumnIfNeeded(tableName) {
+        const [columns] = await this.getPool().query(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = 'userId'`, [DB_NAME, tableName]);
+        if (columns.length === 0) {
+            await this.getPool().query(`ALTER TABLE ${tableName} ADD COLUMN userId VARCHAR(64) NOT NULL DEFAULT '1'`);
+        }
+    }
     async ensureSchema() {
         await this.getPool().query(`
       CREATE TABLE IF NOT EXISTS admin (
@@ -60,6 +66,31 @@ let DatabaseService = class DatabaseService {
         passwordHash VARCHAR(255) NOT NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+        await this.getPool().query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id VARCHAR(64) PRIMARY KEY,
+        email VARCHAR(100) NOT NULL UNIQUE,
+        passwordHash VARCHAR(255) NOT NULL,
+        createdAt VARCHAR(32) NOT NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+        // Migrate 'username' column to 'email' if it exists from previous run
+        try {
+            const [columns] = await this.getPool().query(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users' AND COLUMN_NAME = 'username'`, [DB_NAME]);
+            if (columns.length > 0) {
+                await this.getPool().query('ALTER TABLE users CHANGE username email VARCHAR(100) NOT NULL UNIQUE');
+            }
+        }
+        catch (err) {
+            console.error('Failed to rename username column to email:', err);
+        }
+        // Migrate any legacy 'Abhimanyu' email values to 'abhimanyu@gmail.com'
+        try {
+            await this.getPool().query("UPDATE users SET email = 'abhimanyu@gmail.com' WHERE LOWER(email) = 'abhimanyu'");
+        }
+        catch (err) {
+            console.error('Failed to update legacy email address:', err);
+        }
         await this.getPool().query(`
       CREATE TABLE IF NOT EXISTS targets (
         id VARCHAR(64) PRIMARY KEY,
@@ -78,6 +109,7 @@ let DatabaseService = class DatabaseService {
         title VARCHAR(255) NOT NULL,
         description TEXT,
         status ENUM('in_progress','paused','completed','incomplete') NOT NULL,
+        color VARCHAR(32) NOT NULL DEFAULT 'green',
         createdAt VARCHAR(32) NOT NULL,
         updatedAt VARCHAR(32) NOT NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -106,10 +138,46 @@ let DatabaseService = class DatabaseService {
         updatedAt VARCHAR(32) NOT NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
-        const [rows] = await this.getPool().query('SELECT COUNT(*) AS count FROM admin');
-        if (rows[0].count === 0) {
-            const defaultPasswordHash = await this.hashPassword('version');
-            await this.getPool().query('INSERT INTO admin (id, username, passwordHash) VALUES (1, ?, ?)', ['Abhimanyu', defaultPasswordHash]);
+        // Check if users table is empty
+        const [usersCount] = await this.getPool().query('SELECT COUNT(*) AS count FROM users');
+        if (usersCount[0].count === 0) {
+            // Check if legacy admin table has data
+            let hasAdminData = false;
+            try {
+                const [adminRows] = await this.getPool().query('SELECT * FROM admin');
+                if (adminRows.length > 0) {
+                    hasAdminData = true;
+                    for (const admin of adminRows) {
+                        let email = admin.username;
+                        if (email.toLowerCase() === 'abhimanyu') {
+                            email = 'abhimanyu@gmail.com';
+                        }
+                        await this.getPool().query('INSERT IGNORE INTO users (id, email, passwordHash, createdAt) VALUES (?, ?, ?, ?)', [admin.id.toString(), email, admin.passwordHash, new Date().toISOString()]);
+                    }
+                }
+            }
+            catch (err) {
+                // admin table might not exist
+            }
+            if (!hasAdminData) {
+                const defaultPasswordHash = await this.hashPassword('version');
+                await this.getPool().query('INSERT IGNORE INTO users (id, email, passwordHash, createdAt) VALUES ("1", ?, ?, ?)', ['abhimanyu@gmail.com', defaultPasswordHash, new Date().toISOString()]);
+            }
+        }
+        // Add userId column if needed to other tables
+        await this.addUserIdColumnIfNeeded('targets');
+        await this.addUserIdColumnIfNeeded('personality');
+        await this.addUserIdColumnIfNeeded('books');
+        await this.addUserIdColumnIfNeeded('diary');
+        // Add color column to personality if it doesn't exist
+        try {
+            const [columns] = await this.getPool().query(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'personality' AND COLUMN_NAME = 'color'`, [DB_NAME]);
+            if (columns.length === 0) {
+                await this.getPool().query("ALTER TABLE personality ADD COLUMN color VARCHAR(32) NOT NULL DEFAULT 'green'");
+            }
+        }
+        catch (err) {
+            console.error('Failed to add color column to personality table:', err);
         }
     }
     getPool() {
@@ -131,11 +199,27 @@ let DatabaseService = class DatabaseService {
         return rows;
     }
     async getAdmin() {
-        const [rows] = await this.getPool().query('SELECT username, passwordHash FROM admin WHERE id = 1 LIMIT 1');
+        const [rows] = await this.getPool().query('SELECT email AS username, passwordHash FROM users WHERE id = "1" LIMIT 1');
         return rows[0] ?? null;
     }
     async saveAdmin(username, passwordHash) {
-        await this.getPool().query('INSERT INTO admin (id, username, passwordHash) VALUES (1, ?, ?) ON DUPLICATE KEY UPDATE username = VALUES(username), passwordHash = VALUES(passwordHash)', [username, passwordHash]);
+        await this.getPool().query('INSERT INTO users (id, email, passwordHash, createdAt) VALUES ("1", ?, ?, ?) ON DUPLICATE KEY UPDATE email = VALUES(email), passwordHash = VALUES(passwordHash)', [username, passwordHash, new Date().toISOString()]);
+    }
+    async getUserByEmail(email) {
+        const [rows] = await this.getPool().query('SELECT id, email, passwordHash FROM users WHERE email = ? LIMIT 1', [email]);
+        return rows[0] ?? null;
+    }
+    async getUserById(id) {
+        const [rows] = await this.getPool().query('SELECT id, email, passwordHash FROM users WHERE id = ? LIMIT 1', [id]);
+        return rows[0] ?? null;
+    }
+    async createUser(email, passwordHash) {
+        const id = Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12);
+        await this.getPool().query('INSERT INTO users (id, email, passwordHash, createdAt) VALUES (?, ?, ?, ?)', [id, email, passwordHash, new Date().toISOString()]);
+        return { id, email };
+    }
+    async updateUserProfile(id, email, passwordHash) {
+        await this.getPool().query('UPDATE users SET email = ?, passwordHash = ? WHERE id = ?', [email, passwordHash, id]);
     }
     async hashPassword(password) {
         return bcryptjs_1.default.hashSync(password, bcryptjs_1.default.genSaltSync(10));

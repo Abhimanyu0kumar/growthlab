@@ -17,6 +17,10 @@ export default function Targets({ targets = [], onAction }: TargetsProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   
+  // Filter States
+  const [statusFilter, setStatusFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
+
   // View Modes: standard tab grid vs daily sidebar breakdown
   const [viewMode, setViewMode] = useState<'standard' | 'days'>('days');
   const todayStr = new Date().toISOString().split('T')[0];
@@ -58,13 +62,15 @@ export default function Targets({ targets = [], onAction }: TargetsProps) {
     setCreatedAtDate(newKey);
   }, [activeSubTab]);
 
-  // Filter targets based on current active sub-tab and search query
+  // Filter targets based on current active sub-tab, search, status, and date
   const filteredTargets = targets.filter(t => {
     const matchesTab = t.type === activeSubTab;
     const matchesSearch = 
       t.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
       t.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesTab && matchesSearch;
+    const matchesStatus = statusFilter ? t.status === statusFilter : true;
+    const matchesDate = dateFilter ? t.createdAt.split('T')[0] === dateFilter : true;
+    return matchesTab && matchesSearch && matchesStatus && matchesDate;
   });
 
   const getGroupKey = (createdAtStr: string) => {
@@ -336,18 +342,63 @@ export default function Targets({ targets = [], onAction }: TargetsProps) {
           ))}
         </div>
 
-        {/* Search controls */}
-        <div className="list-controls">
-          <div className="search-input-wrapper">
-            <Search size={18} />
-            <input
-              id="target-search-input"
-              type="text"
-              className="form-input"
-              placeholder="Search targets..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+        {/* Search and Filter controls */}
+        <div className="list-controls" style={{ flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flex: 1, flexWrap: 'wrap' }}>
+            <div className="search-input-wrapper" style={{ maxWidth: '320px', flex: 1 }}>
+              <Search size={18} />
+              <input
+                id="target-search-input"
+                type="text"
+                className="form-input"
+                placeholder="Search targets..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <select
+                id="target-filter-status"
+                className="form-input"
+                style={{ width: '150px', height: '42px', padding: '0 0.75rem' }}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="">All Statuses</option>
+                <option value="in_progress">In Progress</option>
+                <option value="paused">Paused</option>
+                <option value="completed">Completed</option>
+                <option value="incomplete">Incomplete</option>
+              </select>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Date:</span>
+                <input
+                  id="target-filter-date"
+                  type="date"
+                  className="form-input"
+                  style={{ width: '160px', height: '42px', padding: '0 0.75rem' }}
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                />
+              </div>
+
+              {(statusFilter || dateFilter || searchQuery) && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ width: 'auto', height: '42px', padding: '0 1.25rem', display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}
+                  onClick={() => {
+                    setStatusFilter('');
+                    setDateFilter('');
+                    setSearchQuery('');
+                  }}
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

@@ -9,26 +9,20 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UpdateProfileDto = void 0;
+exports.RegisterDto = void 0;
 const class_validator_1 = require("class-validator");
-class UpdateProfileDto {
+class RegisterDto {
 }
-exports.UpdateProfileDto = UpdateProfileDto;
+exports.RegisterDto = RegisterDto;
 __decorate([
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsNotEmpty)(),
-    __metadata("design:type", String)
-], UpdateProfileDto.prototype, "currentPassword", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    (0, class_validator_1.MinLength)(4),
-    __metadata("design:type", String)
-], UpdateProfileDto.prototype, "newPassword", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEmail)(),
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
-], UpdateProfileDto.prototype, "newEmail", void 0);
-//# sourceMappingURL=update-profile.dto.js.map
+], RegisterDto.prototype, "email", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsNotEmpty)(),
+    (0, class_validator_1.MinLength)(4),
+    __metadata("design:type", String)
+], RegisterDto.prototype, "password", void 0);
+//# sourceMappingURL=register.dto.js.map

@@ -21,21 +21,18 @@ const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const auth_service_1 = require("./auth.service");
 const login_dto_1 = require("./dto/login.dto");
 const update_profile_dto_1 = require("./dto/update-profile.dto");
+const register_dto_1 = require("./dto/register.dto");
 const SESSION_COOKIE_NAME = 'growth_tracker_session';
 let AuthController = class AuthController {
     constructor(authService) {
         this.authService = authService;
     }
     async login(loginDto, res) {
-        const admin = await this.authService.getAdmin();
-        if (!admin) {
-            return res.status(500).json({ error: 'Authentication service unavailable' });
+        const user = await this.authService.validateCredentials(loginDto.email, loginDto.password);
+        if (!user) {
+            return res.status(401).json({ error: 'Invalid email or password' });
         }
-        const isPasswordValid = await this.authService.validateCredentials(loginDto.username, loginDto.password);
-        if (!isPasswordValid) {
-            return res.status(401).json({ error: 'Invalid username or password' });
-        }
-        const token = this.authService.createToken(admin.username);
+        const token = this.authService.createToken(user.id, user.email);
         res.cookie(SESSION_COOKIE_NAME, token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
@@ -43,7 +40,24 @@ let AuthController = class AuthController {
             maxAge: 7 * 24 * 60 * 60 * 1000,
             path: '/',
         });
-        return res.json({ success: true, username: admin.username });
+        return res.json({ success: true, email: user.email });
+    }
+    async register(registerDto, res) {
+        const existingUser = await this.authService.getUserByEmail(registerDto.email);
+        if (existingUser) {
+            return res.status(400).json({ error: 'Email is already registered' });
+        }
+        const passwordHash = await this.authService.hashPassword(registerDto.password);
+        const user = await this.authService.createUser(registerDto.email, passwordHash);
+        const token = this.authService.createToken(user.id, user.email);
+        res.cookie(SESSION_COOKIE_NAME, token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+            path: '/',
+        });
+        return res.json({ success: true, email: user.email });
     }
     async logout(res) {
         res.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
@@ -55,12 +69,12 @@ let AuthController = class AuthController {
         if (!payload) {
             return res.status(401).json({ authenticated: false });
         }
-        const admin = await this.authService.getAdmin();
-        if (!admin) {
-            return res.status(500).json({ error: 'Authentication service unavailable' });
+        const user = await this.authService.getUserById(payload.userId);
+        if (!user) {
+            return res.status(401).json({ authenticated: false });
         }
-        const isDefaultPassword = bcryptjs_1.default.compareSync('version', admin.passwordHash);
-        return res.json({ authenticated: true, username: payload.username, isDefaultPassword });
+        const isDefaultPassword = user.id === '1' && bcryptjs_1.default.compareSync('version', user.passwordHash);
+        return res.json({ authenticated: true, email: payload.email, isDefaultPassword });
     }
     async updateProfile(req, res, body) {
         const token = req.cookies[SESSION_COOKIE_NAME];
@@ -68,20 +82,26 @@ let AuthController = class AuthController {
         if (!payload) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
-        const admin = await this.authService.getAdmin();
-        if (!admin) {
-            return res.status(500).json({ error: 'Authentication service unavailable' });
+        const user = await this.authService.getUserById(payload.userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
         }
-        const isPasswordValid = await this.authService.validateCredentials(admin.username, body.currentPassword);
+        const isPasswordValid = await this.authService.validateCredentials(user.email, body.currentPassword);
         if (!isPasswordValid) {
             return res.status(400).json({ error: 'Incorrect current password' });
         }
-        const newUsername = body.newUsername?.trim() || admin.username;
+        const newEmail = body.newEmail?.trim() || user.email;
+        if (newEmail.toLowerCase() !== user.email.toLowerCase()) {
+            const existingUser = await this.authService.getUserByEmail(newEmail);
+            if (existingUser) {
+                return res.status(400).json({ error: 'Email already taken' });
+            }
+        }
         const newPasswordHash = body.newPassword?.trim()
             ? await this.authService.hashPassword(body.newPassword.trim())
-            : admin.passwordHash;
-        await this.authService.updateProfile(newUsername, newPasswordHash);
-        const newToken = this.authService.createToken(newUsername);
+            : user.passwordHash;
+        await this.authService.updateProfile(user.id, newEmail, newPasswordHash);
+        const newToken = this.authService.createToken(user.id, newEmail);
         res.cookie(SESSION_COOKIE_NAME, newToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
@@ -89,7 +109,7 @@ let AuthController = class AuthController {
             maxAge: 7 * 24 * 60 * 60 * 1000,
             path: '/',
         });
-        return res.json({ success: true, username: newUsername });
+        return res.json({ success: true, email: newEmail });
     }
 };
 exports.AuthController = AuthController;
@@ -102,6 +122,15 @@ __decorate([
     __metadata("design:paramtypes", [login_dto_1.LoginDto, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "login", null);
+__decorate([
+    (0, common_1.Post)('register'),
+    (0, common_1.UsePipes)(new common_1.ValidationPipe({ whitelist: true })),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [register_dto_1.RegisterDto, Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "register", null);
 __decorate([
     (0, common_1.Post)('logout'),
     __param(0, (0, common_1.Res)()),

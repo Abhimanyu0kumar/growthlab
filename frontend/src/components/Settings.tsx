@@ -1,19 +1,22 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Lock, ShieldCheck, Database, RefreshCw } from 'lucide-react';
+import { Lock, ShieldCheck, Database, RefreshCw, Image } from 'lucide-react';
 
 interface SettingsProps {
-  username: string;
-  onUpdateProfile: (data: { currentPassword: string; newPassword?: string; newUsername?: string }) => Promise<{ success: boolean; error?: string }>;
+  email: string;
+  onUpdateProfile: (data: { currentPassword: string; newPassword?: string; newEmail?: string }) => Promise<{ success: boolean; error?: string }>;
+  bgImage: string | null;
+  onUpdateBgImage: (image: string | null) => void;
 }
 
-export default function Settings({ username, onUpdateProfile }: SettingsProps) {
+export default function Settings({ email, onUpdateProfile, bgImage, onUpdateBgImage }: SettingsProps) {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [newUsername, setNewUsername] = useState(username);
+  const [newEmail, setNewEmail] = useState(email);
 
+  const [customUrl, setCustomUrl] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,7 +46,7 @@ export default function Settings({ username, onUpdateProfile }: SettingsProps) {
     try {
       const payload: any = { currentPassword };
       if (newPassword) payload.newPassword = newPassword;
-      if (newUsername && newUsername !== username) payload.newUsername = newUsername;
+      if (newEmail && newEmail !== email) payload.newEmail = newEmail;
 
       const result = await onUpdateProfile(payload);
       if (result.success) {
@@ -88,16 +91,16 @@ export default function Settings({ username, onUpdateProfile }: SettingsProps) {
           <form onSubmit={handleSubmit} className="settings-section">
             <div className="settings-row">
               <div className="settings-label-col">
-                <label className="settings-label" htmlFor="settings-username">Username</label>
-                <span className="settings-desc">Change the administrator login username.</span>
+                <label className="settings-label" htmlFor="settings-email">Email Address</label>
+                <span className="settings-desc">Change the administrator login email address.</span>
               </div>
               <div>
                 <input
-                  id="settings-username"
-                  type="text"
+                  id="settings-email"
+                  type="email"
                   className="form-input"
-                  value={newUsername}
-                  onChange={(e) => setNewUsername(e.target.value)}
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
                   required
                 />
               </div>
@@ -169,26 +172,176 @@ export default function Settings({ username, onUpdateProfile }: SettingsProps) {
           </form>
         </div>
 
-        {/* Database Encryption Information Card */}
+        {/* Background Customization Card */}
         <div className="glass-panel">
-          <h2 style={{ fontSize: '1.2rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700 }}>
-            <Database size={20} style={{ color: 'var(--accent-secondary)' }} />
-            <span>Database Storage & Security</span>
+          <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700 }}>
+            <Image size={20} style={{ color: 'var(--accent-primary)' }} />
+            <span>Application Background</span>
           </h2>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-            <p>
-              Your application now stores its textual data in MySQL. The database connection uses the local MySQL server and the credentials configured in <code style={{ color: 'var(--accent-primary)' }}>.env.local</code>.
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: '8px', color: '#34d399' }}>
-              <ShieldCheck size={20} style={{ flexShrink: 0 }} />
-              <span>
-                <strong>File security:</strong> Book upload files are still encrypted on disk under <code style={{ color: 'var(--accent-primary)' }}>data/uploads</code> so attachments remain protected even as metadata moves into MySQL.
-              </span>
+          
+          <div className="settings-section">
+            {/* Presets Row */}
+            <div className="settings-row" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '1rem' }}>
+              <div className="settings-label-col" style={{ maxWidth: '100%' }}>
+                <span className="settings-label">Preset Dark Backgrounds</span>
+                <span className="settings-desc">Choose a curated premium dark-aesthetic preset background.</span>
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginTop: '0.5rem' }}>
+                <div 
+                  onClick={() => onUpdateBgImage(null)}
+                  style={{ 
+                    height: '80px', 
+                    borderRadius: '8px', 
+                    border: bgImage === null ? '2px solid var(--accent-primary)' : '1px solid rgba(255,255,255,0.1)', 
+                    background: 'radial-gradient(circle at 50% 50%, #0d0c15 0%, #050508 100%)', 
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    color: bgImage === null ? 'var(--text-primary)' : 'var(--text-muted)',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Default Theme
+                </div>
+                
+                {[
+                  { name: 'Cosmos Stars', url: 'https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?q=80&w=600' },
+                  { name: 'Neon Wave', url: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=600' },
+                  { name: 'Deep Mesh', url: 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?q=80&w=600' },
+                  { name: 'Minimal Lines', url: 'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?q=80&w=600' }
+                ].map((preset) => (
+                  <div 
+                    key={preset.name}
+                    onClick={() => onUpdateBgImage(preset.url)}
+                    style={{ 
+                      height: '80px', 
+                      borderRadius: '8px', 
+                      border: bgImage === preset.url ? '2px solid var(--accent-primary)' : '1px solid rgba(255,255,255,0.1)', 
+                      backgroundImage: `url(${preset.url})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'flex-end',
+                      padding: '0.4rem',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <div style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.2) 100%)',
+                      zIndex: 1
+                    }} />
+                    <span style={{ 
+                      fontSize: '0.75rem', 
+                      fontWeight: 600, 
+                      color: '#ffffff',
+                      zIndex: 2,
+                      textShadow: '0 1px 3px rgba(0,0,0,0.5)'
+                    }}>
+                      {preset.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-dark)' }}>
-              Database credentials are read from <code style={{ color: 'var(--text-muted)' }}>.env.local</code>. If you want to change the connection, update <code style={{ color: 'var(--text-muted)' }}>DB_HOST</code>, <code style={{ color: 'var(--text-muted)' }}>DB_USER</code>, <code style={{ color: 'var(--text-muted)' }}>DB_PASSWORD</code>, and <code style={{ color: 'var(--text-muted)' }}>DB_NAME</code>.
-            </p>
+
+            {/* Custom URL Input */}
+            <div className="settings-row" style={{ marginTop: '1.5rem' }}>
+              <div className="settings-label-col">
+                <span className="settings-label">Custom Image URL</span>
+                <span className="settings-desc">Paste the direct URL to any background image.</span>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="https://example.com/image.jpg"
+                  value={customUrl}
+                  onChange={(e) => setCustomUrl(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button 
+                  type="button"
+                  className="btn"
+                  style={{ width: 'auto', padding: '0.625rem 1.25rem' }}
+                  onClick={() => {
+                    if (customUrl.trim()) {
+                      onUpdateBgImage(customUrl.trim());
+                    }
+                  }}
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+
+            {/* File Upload Row */}
+            <div className="settings-row" style={{ marginTop: '1.5rem' }}>
+              <div className="settings-label-col">
+                <span className="settings-label">Upload Custom Image</span>
+                <span className="settings-desc">Select a local image file from your device (Max 1.5MB).</span>
+              </div>
+              <div>
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 1500 * 1024) {
+                      alert('Please choose an image smaller than 1.5MB to ensure it fits in browser storage.');
+                      return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      const base64 = event.target?.result as string;
+                      if (base64) {
+                        onUpdateBgImage(base64);
+                      }
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                  style={{ display: 'none' }}
+                  id="custom-bg-upload"
+                />
+                <label 
+                  htmlFor="custom-bg-upload"
+                  className="btn btn-secondary"
+                  style={{ 
+                    display: 'inline-block',
+                    width: 'auto',
+                    textAlign: 'center',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Select Local Image
+                </label>
+              </div>
+            </div>
+
+            {/* Reset Theme Button */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2rem' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ width: 'auto', borderColor: 'rgba(239, 68, 68, 0.4)', color: '#f87171' }}
+                onClick={() => {
+                  onUpdateBgImage(null);
+                  setCustomUrl('');
+                }}
+              >
+                Reset to Default Theme
+              </button>
+            </div>
+
           </div>
         </div>
       </div>

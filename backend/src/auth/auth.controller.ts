@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { RegisterDto } from './dto/register.dto';
 
 const SESSION_COOKIE_NAME = 'growth_tracker_session';
 
@@ -14,17 +15,12 @@ export class AuthController {
     @Post('login')
     @UsePipes(new ValidationPipe({ whitelist: true }))
     async login(@Body() loginDto: LoginDto, @Res() res: Response) {
-        const admin = await this.authService.getAdmin();
-        if (!admin) {
-            return res.status(500).json({ error: 'Authentication service unavailable' });
+        const user = await this.authService.validateCredentials(loginDto.email, loginDto.password);
+        if (!user) {
+            return res.status(401).json({ error: 'Invalid email or password' });
         }
 
-        const isPasswordValid = await this.authService.validateCredentials(loginDto.username, loginDto.password);
-        if (!isPasswordValid) {
-            return res.status(401).json({ error: 'Invalid username or password' });
-        }
-
-        const token = this.authService.createToken(admin.username);
+        const token = this.authService.createToken(user.id, user.email);
         res.cookie(SESSION_COOKIE_NAME, token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
@@ -32,7 +28,30 @@ export class AuthController {
             maxAge: 7 * 24 * 60 * 60 * 1000,
             path: '/',
         });
-        return res.json({ success: true, username: admin.username });
+        return res.json({ success: true, email: user.email });
+    }
+
+    @Post('register')
+    @UsePipes(new ValidationPipe({ whitelist: true }))
+    async register(@Body() registerDto: RegisterDto, @Res() res: Response) {
+        const existingUser = await this.authService.getUserByEmail(registerDto.email);
+        if (existingUser) {
+            return res.status(400).json({ error: 'Email is already registered' });
+        }
+
+        const passwordHash = await this.authService.hashPassword(registerDto.password);
+        const user = await this.authService.createUser(registerDto.email, passwordHash);
+
+        const token = this.authService.createToken(user.id, user.email);
+        res.cookie(SESSION_COOKIE_NAME, token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+            path: '/',
+        });
+
+        return res.json({ success: true, email: user.email });
     }
 
     @Post('logout')
@@ -49,14 +68,14 @@ export class AuthController {
             return res.status(401).json({ authenticated: false });
         }
 
-        const admin = await this.authService.getAdmin();
-        if (!admin) {
-            return res.status(500).json({ error: 'Authentication service unavailable' });
+        const user = await this.authService.getUserById(payload.userId);
+        if (!user) {
+            return res.status(401).json({ authenticated: false });
         }
 
-        const isDefaultPassword = bcrypt.compareSync('version', admin.passwordHash);
+        const isDefaultPassword = user.id === '1' && bcrypt.compareSync('version', user.passwordHash);
 
-        return res.json({ authenticated: true, username: payload.username, isDefaultPassword });
+        return res.json({ authenticated: true, email: payload.email, isDefaultPassword });
     }
 
     @Post('profile')
@@ -68,23 +87,30 @@ export class AuthController {
             return res.status(401).json({ error: 'Unauthorized' });
         }
 
-        const admin = await this.authService.getAdmin();
-        if (!admin) {
-            return res.status(500).json({ error: 'Authentication service unavailable' });
+        const user = await this.authService.getUserById(payload.userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
         }
 
-        const isPasswordValid = await this.authService.validateCredentials(admin.username, body.currentPassword);
+        const isPasswordValid = await this.authService.validateCredentials(user.email, body.currentPassword);
         if (!isPasswordValid) {
             return res.status(400).json({ error: 'Incorrect current password' });
         }
 
-        const newUsername = body.newUsername?.trim() || admin.username;
+        const newEmail = body.newEmail?.trim() || user.email;
+        if (newEmail.toLowerCase() !== user.email.toLowerCase()) {
+            const existingUser = await this.authService.getUserByEmail(newEmail);
+            if (existingUser) {
+                return res.status(400).json({ error: 'Email already taken' });
+            }
+        }
+
         const newPasswordHash = body.newPassword?.trim()
             ? await this.authService.hashPassword(body.newPassword.trim())
-            : admin.passwordHash;
+            : user.passwordHash;
 
-        await this.authService.updateProfile(newUsername, newPasswordHash);
-        const newToken = this.authService.createToken(newUsername);
+        await this.authService.updateProfile(user.id, newEmail, newPasswordHash);
+        const newToken = this.authService.createToken(user.id, newEmail);
         res.cookie(SESSION_COOKIE_NAME, newToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
@@ -93,6 +119,6 @@ export class AuthController {
             path: '/',
         });
 
-        return res.json({ success: true, username: newUsername });
+        return res.json({ success: true, email: newEmail });
     }
 }

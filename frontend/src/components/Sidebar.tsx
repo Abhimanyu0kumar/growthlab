@@ -14,11 +14,11 @@ import {
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  username: string;
+  email: string;
   onLogout: () => void;
 }
 
-export default function Sidebar({ activeTab, setActiveTab, username, onLogout }: SidebarProps) {
+export default function Sidebar({ activeTab, setActiveTab, email, onLogout }: SidebarProps) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'targets', label: 'Targets', icon: Target },
@@ -58,10 +58,10 @@ export default function Sidebar({ activeTab, setActiveTab, username, onLogout }:
       <div className="sidebar-footer">
         <div className="user-profile-badge">
           <div className="avatar">
-            {username ? username.charAt(0).toUpperCase() : 'A'}
+            {email ? email.charAt(0).toUpperCase() : 'A'}
           </div>
           <div className="user-info">
-            <span className="username">{username || 'Abhimanyu'}</span>
+            <span className="username" style={{ fontSize: '0.85rem', wordBreak: 'break-all' }}>{email || 'abhimanyu@gmail.com'}</span>
             <span className="role">Administrator</span>
           </div>
         </div>

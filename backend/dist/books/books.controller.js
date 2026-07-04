@@ -27,15 +27,22 @@ let BooksController = class BooksController {
     }
     async downloadBook(req, res, bookId) {
         const token = req.cookies[SESSION_COOKIE_NAME];
-        if (!token || !this.authService.verifyToken(token)) {
+        const payload = token ? this.authService.verifyToken(token) : null;
+        if (!payload) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
         if (!bookId) {
             return res.status(400).json({ error: 'Book ID is required' });
         }
-        const [rows] = await this.db.query('SELECT fileName, fileMimeType FROM books WHERE id = ? LIMIT 1', [bookId]);
+        const [rows] = await this.db.query('SELECT fileName, fileMimeType, userId FROM books WHERE id = ? LIMIT 1', [bookId]);
         const book = rows[0];
-        if (!book || !book.fileName) {
+        if (!book) {
+            return res.status(404).json({ error: 'Book record not found' });
+        }
+        if (book.userId !== payload.userId) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+        if (!book.fileName) {
             return res.status(404).json({ error: 'Book file not found' });
         }
         const encryptedBuffer = await this.db.readEncryptedFile(bookId);
@@ -50,15 +57,20 @@ let BooksController = class BooksController {
     }
     async uploadBook(req, res, file, bookId) {
         const token = req.cookies[SESSION_COOKIE_NAME];
-        if (!token || !this.authService.verifyToken(token)) {
+        const payload = token ? this.authService.verifyToken(token) : null;
+        if (!payload) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
         if (!file || !bookId) {
             return res.status(400).json({ error: 'File and Book ID are required' });
         }
-        const [rows] = await this.db.query('SELECT id FROM books WHERE id = ? LIMIT 1', [bookId]);
-        if (!rows[0]) {
+        const [rows] = await this.db.query('SELECT id, userId FROM books WHERE id = ? LIMIT 1', [bookId]);
+        const book = rows[0];
+        if (!book) {
             return res.status(404).json({ error: 'Book record not found' });
+        }
+        if (book.userId !== payload.userId) {
+            return res.status(403).json({ error: 'Forbidden' });
         }
         await this.db.saveEncryptedFile(bookId, file.buffer);
         await this.db.query('UPDATE books SET fileName = ?, fileMimeType = ?, updatedAt = ? WHERE id = ?', [file.originalname, file.mimetype || 'application/octet-stream', new Date().toISOString(), bookId]);

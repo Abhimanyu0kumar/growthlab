@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Target, Sparkles, BookOpen, BookText, AlertTriangle } from 'lucide-react';
+import { Target, Sparkles, BookOpen, BookText, Clock, Play } from 'lucide-react';
 import { Target as DbTarget, PersonalityItem, Book, DiaryEntry } from '@/lib/db';
 
 interface DashboardProps {
@@ -11,6 +11,7 @@ interface DashboardProps {
   diary: DiaryEntry[];
   setActiveTab: (tab: string) => void;
   showPasswordWarning: boolean;
+  onAction: (action: 'create' | 'update' | 'delete', item: any, targetCollection?: string) => Promise<void>;
 }
 
 export default function Dashboard({
@@ -19,7 +20,8 @@ export default function Dashboard({
   books = [],
   diary = [],
   setActiveTab,
-  showPasswordWarning
+  showPasswordWarning,
+  onAction
 }: DashboardProps) {
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string; visible: boolean }>({
     x: 0,
@@ -27,6 +29,9 @@ export default function Dashboard({
     text: '',
     visible: false
   });
+
+  const [isRunningModalOpen, setIsRunningModalOpen] = useState(false);
+  const [graphPeriod, setGraphPeriod] = useState<'weekly' | 'monthly' | 'yearly' | 'overall'>('weekly');
 
   // 1. Calculate Stats
   const totalTargets = targets.length;
@@ -45,49 +50,95 @@ export default function Dashboard({
   const completedDiary = diary.filter(d => d.status === 'completed').length;
   const diaryRate = totalDiary > 0 ? Math.round((completedDiary / totalDiary) * 100) : 0;
 
+  // Running items calculation
+  const inProgressTargets = targets.filter(t => t.status === 'in_progress');
+  const inProgressPersonality = personality.filter(p => p.status === 'in_progress');
+  const inProgressBooks = books.filter(b => b.status === 'in_progress');
+  const inProgressDiary = diary.filter(d => d.status === 'in_progress');
+  const totalRunningCount = inProgressTargets.length + inProgressPersonality.length + inProgressBooks.length + inProgressDiary.length;
+
   // Overall growth indicator: average of the rates
   const activeCategoriesCount = [totalTargets > 0, totalPersonality > 0, totalBooks > 0].filter(Boolean).length;
-  const overallRate = activeCategoriesCount > 0 
-    ? Math.round((targetRate + personalityRate + booksRate) / activeCategoriesCount) 
+  const overallRate = activeCategoriesCount > 0
+    ? Math.round((targetRate + personalityRate + booksRate) / activeCategoriesCount)
     : 0;
 
-  // 2. Generate historical progress for the past 7 days
+  // Helper to calculate stats up to a given date
+  const calculateStatsForDate = (dateStr: string, displayStr: string) => {
+    const targetsUpToDate = targets.filter(t => t.createdAt.split('T')[0] <= dateStr);
+    const targetsCompletedUpToDate = targets.filter(t => t.createdAt.split('T')[0] <= dateStr && t.status === 'completed' && t.updatedAt.split('T')[0] <= dateStr);
+    const tRate = targetsUpToDate.length > 0 ? (targetsCompletedUpToDate.length / targetsUpToDate.length) : 0;
+
+    const personalityUpToDate = personality.filter(p => p.createdAt.split('T')[0] <= dateStr);
+    const personalityCompletedUpToDate = personality.filter(p => p.createdAt.split('T')[0] <= dateStr && p.status === 'completed' && p.updatedAt.split('T')[0] <= dateStr);
+    const pRate = personalityUpToDate.length > 0 ? (personalityCompletedUpToDate.length / personalityUpToDate.length) : 0;
+
+    const booksUpToDate = books.filter(b => b.createdAt.split('T')[0] <= dateStr);
+    const booksCompletedUpToDate = books.filter(b => b.createdAt.split('T')[0] <= dateStr && b.status === 'completed' && b.updatedAt.split('T')[0] <= dateStr);
+    const bRate = booksUpToDate.length > 0 ? (booksCompletedUpToDate.length / booksUpToDate.length) : 0;
+
+    const denominator = [targetsUpToDate.length > 0, personalityUpToDate.length > 0, booksUpToDate.length > 0].filter(Boolean).length;
+    const combinedRate = denominator > 0 ? Math.round(((tRate + pRate + bRate) / denominator) * 100) : 0;
+
+    return {
+      label: displayStr,
+      rawDate: dateStr,
+      value: combinedRate,
+      targets: targetsUpToDate.length > 0 ? Math.round(tRate * 100) : 0,
+      personality: personalityUpToDate.length > 0 ? Math.round(pRate * 100) : 0,
+      books: booksUpToDate.length > 0 ? Math.round(bRate * 100) : 0,
+      diary: diary.filter(d => d.date <= dateStr).length
+    };
+  };
+
+  // 2. Generate historical progress based on selected period
   const getGrowthData = () => {
     const dataPoints = [];
     const now = new Date();
-    
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(now.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      const displayStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
 
-      // Count stats up to this date
-      const targetsUpToDate = targets.filter(t => t.createdAt.split('T')[0] <= dateStr);
-      const targetsCompletedUpToDate = targets.filter(t => t.createdAt.split('T')[0] <= dateStr && t.status === 'completed' && t.updatedAt.split('T')[0] <= dateStr);
-      const tRate = targetsUpToDate.length > 0 ? (targetsCompletedUpToDate.length / targetsUpToDate.length) : 0;
-
-      const personalityUpToDate = personality.filter(p => p.createdAt.split('T')[0] <= dateStr);
-      const personalityCompletedUpToDate = personality.filter(p => p.createdAt.split('T')[0] <= dateStr && p.status === 'completed' && p.updatedAt.split('T')[0] <= dateStr);
-      const pRate = personalityUpToDate.length > 0 ? (personalityCompletedUpToDate.length / personalityUpToDate.length) : 0;
-
-      const booksUpToDate = books.filter(b => b.createdAt.split('T')[0] <= dateStr);
-      const booksCompletedUpToDate = books.filter(b => b.createdAt.split('T')[0] <= dateStr && b.status === 'completed' && b.updatedAt.split('T')[0] <= dateStr);
-      const bRate = booksUpToDate.length > 0 ? (booksCompletedUpToDate.length / booksUpToDate.length) : 0;
-
-      // Combined rate for this day
-      const denominator = [targetsUpToDate.length > 0, personalityUpToDate.length > 0, booksUpToDate.length > 0].filter(Boolean).length;
-      const combinedRate = denominator > 0 ? Math.round(((tRate + pRate + bRate) / denominator) * 100) : 0;
-
-      dataPoints.push({
-        label: displayStr,
-        rawDate: dateStr,
-        value: combinedRate,
-        targets: targetsUpToDate.length > 0 ? Math.round(tRate * 100) : 0,
-        personality: personalityUpToDate.length > 0 ? Math.round(pRate * 100) : 0,
-        books: booksUpToDate.length > 0 ? Math.round(bRate * 100) : 0,
-        diary: diary.filter(d => d.date <= dateStr).length
-      });
+    if (graphPeriod === 'weekly') {
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(now.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+        const displayStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
+        dataPoints.push(calculateStatsForDate(dateStr, displayStr));
+      }
+    } else if (graphPeriod === 'monthly') {
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(now.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+        // Display label for every 5th day to avoid crowding
+        const displayStr = i % 5 === 0 ? date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) : '';
+        dataPoints.push(calculateStatsForDate(dateStr, displayStr));
+      }
+    } else if (graphPeriod === 'yearly') {
+      for (let i = 11; i >= 0; i--) {
+        const date = new Date(now);
+        date.setMonth(now.getMonth() - i);
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const lastDay = new Date(year, month + 1, 0).getDate();
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        const displayStr = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+        dataPoints.push(calculateStatsForDate(dateStr, displayStr));
+      }
+    } else { // overall
+      const allDates = [...targets, ...personality, ...books].map(x => x.createdAt ? x.createdAt.split('T')[0] : '').filter(Boolean).sort();
+      const earliestDateStr = allDates[0] || new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+      const start = new Date(earliestDateStr + 'T00:00:00');
+      const end = new Date(now.toISOString().split('T')[0] + 'T23:59:59');
+      const totalDays = Math.max(Math.ceil((end.getTime() - start.getTime()) / 86400000), 1);
+      
+      const numPoints = 8;
+      for (let i = 0; i < numPoints; i++) {
+        const date = new Date(start);
+        date.setDate(start.getDate() + Math.round((i / (numPoints - 1)) * totalDays));
+        const dateStr = date.toISOString().split('T')[0];
+        const displayStr = date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' });
+        dataPoints.push(calculateStatsForDate(dateStr, displayStr));
+      }
     }
     return dataPoints;
   };
@@ -111,8 +162,8 @@ export default function Dashboard({
     return { x, y, data: d };
   });
 
-  const linePath = points.length > 0 
-    ? `M ${points.map(p => `${p.x} ${p.y}`).join(' L ')}` 
+  const linePath = points.length > 0
+    ? `M ${points.map(p => `${p.x} ${p.y}`).join(' L ')}`
     : '';
 
   const areaPath = points.length > 0
@@ -181,26 +232,21 @@ export default function Dashboard({
         </div>
       </div>
 
-      {showPasswordWarning && (
-        <div className="password-banner">
-          <div className="password-banner-text">
-            <AlertTriangle size={20} />
-            <span>
-              <strong>Security Warning:</strong> You are currently using the default seeded password. For absolute data privacy, please change your password.
-            </span>
-          </div>
-          <button 
-            className="btn btn-sm btn-secondary" 
-            style={{ borderColor: 'rgba(245, 158, 11, 0.4)', color: '#fbbf24' }}
-            onClick={() => setActiveTab('settings')}
-          >
-            Go to Settings
-          </button>
-        </div>
-      )}
-
       {/* Stats Summary Panel */}
       <div className="dashboard-grid">
+        <div className="glass-panel dashboard-card-stat" onClick={() => setIsRunningModalOpen(true)} style={{ cursor: 'pointer', background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="stat-label" style={{ color: '#a5b4fc' }}>Active Focus / Running</div>
+            <div className="stat-icon" style={{ background: 'rgba(99, 102, 241, 0.2)', color: '#818cf8' }}><Clock size={20} /></div>
+          </div>
+          <div className="stat-value" style={{ color: '#818cf8', fontSize: '1.5rem' }}>
+            {totalRunningCount <= 1 ? `${totalRunningCount} Focus` : `${totalRunningCount} Foci`}
+          </div>
+          <div className="stat-trend" style={{ color: '#a5b4fc' }}>
+            {totalRunningCount === 0 ? 'All caught up! Time to grow! ✨' : 'Click to view all in-progress'}
+          </div>
+        </div>
+
         <div className="glass-panel dashboard-card-stat" onClick={() => setActiveTab('targets')} style={{ cursor: 'pointer' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-label">Targets</div>
@@ -248,8 +294,23 @@ export default function Dashboard({
 
       {/* Main Growth Graph */}
       <div className="glass-panel" style={{ position: 'relative' }}>
-        <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem', fontWeight: 700 }}>Overall Growth Progress (%)</h2>
-        
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <h2 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>Overall Growth Progress (%)</h2>
+          <div className="view-mode-selector" style={{ margin: 0 }}>
+            {(['weekly', 'monthly', 'yearly', 'overall'] as const).map((period) => (
+              <button
+                key={period}
+                type="button"
+                className={`view-mode-btn ${graphPeriod === period ? 'active' : ''}`}
+                onClick={() => setGraphPeriod(period)}
+                style={{ padding: '0.35rem 0.8rem', fontSize: '0.8rem' }}
+              >
+                {period.charAt(0).toUpperCase() + period.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {totalTargets === 0 && totalPersonality === 0 && totalBooks === 0 ? (
           <div className="empty-state">
             <Sparkles size={48} />
@@ -284,6 +345,7 @@ export default function Dashboard({
 
                 {/* X Axis Labels */}
                 {growthData.map((d, idx) => {
+                  if (!d.label) return null;
                   const x = paddingLeft + (idx / (growthData.length - 1)) * chartWidth;
                   return (
                     <text key={idx} x={x} y={height - 5} className="svg-axis-text" textAnchor="middle">
@@ -318,15 +380,15 @@ export default function Dashboard({
                   />
                 ))}
               </svg>
-              
+
               {/* Tooltip */}
               {tooltip.visible && (
-                <div 
-                  className="chart-tooltip" 
-                  style={{ 
-                    display: 'block', 
-                    left: `${tooltip.x}px`, 
-                    top: `${tooltip.y}px` 
+                <div
+                  className="chart-tooltip"
+                  style={{
+                    display: 'block',
+                    left: `${tooltip.x}px`,
+                    top: `${tooltip.y}px`
                   }}
                 >
                   {tooltip.text}
@@ -342,7 +404,7 @@ export default function Dashboard({
         {/* Targets and Personality bar charts */}
         <div className="glass-panel">
           <h2 style={{ fontSize: '1.1rem', marginBottom: '1.25rem', fontWeight: 700 }}>Individual Progress by Section</h2>
-          
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             {/* Targets Subcategories */}
             <div>
@@ -383,7 +445,7 @@ export default function Dashboard({
         {/* Books and Diary stats card */}
         <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column' }}>
           <h2 style={{ fontSize: '1.1rem', marginBottom: '1rem', fontWeight: 700 }}>Reading & Journals</h2>
-          
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', flex: 1 }}>
             {/* Top Book Categories */}
             <div>
@@ -415,13 +477,13 @@ export default function Dashboard({
                   const maxLogs = Math.max(...growthData.map(d => d.diary), 1);
                   const barHeight = Math.max((day.diary / maxLogs) * 100, 10);
                   return (
-                    <div 
-                      key={idx} 
-                      style={{ 
-                        flex: 1, 
-                        height: `${barHeight}%`, 
-                        background: day.diary > 0 ? '#10b981' : 'rgba(255, 255, 255, 0.05)', 
-                        borderRadius: '2px', 
+                    <div
+                      key={idx}
+                      style={{
+                        flex: 1,
+                        height: `${barHeight}%`,
+                        background: day.diary > 0 ? '#10b981' : 'rgba(255, 255, 255, 0.05)',
+                        borderRadius: '2px',
                         cursor: 'pointer',
                         position: 'relative'
                       }}
@@ -438,6 +500,239 @@ export default function Dashboard({
           </div>
         </div>
       </div>
+
+      {isRunningModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsRunningModalOpen(false)}>
+          <div className="glass-panel modal-content" style={{ maxWidth: '600px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Clock size={22} style={{ color: 'var(--accent-primary)' }} />
+                <span>Active Focus & Running Items</span>
+              </h2>
+              <button className="modal-close-btn" onClick={() => setIsRunningModalOpen(false)}>
+                &times;
+              </button>
+            </div>
+
+            <div style={{ maxHeight: '450px', overflowY: 'auto', paddingRight: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {totalRunningCount === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)' }}>
+                  <Play size={36} style={{ color: 'var(--text-dark)', marginBottom: '0.5rem' }} />
+                  <p style={{ fontWeight: 600 }}>No items currently in progress.</p>
+                  <p style={{ fontSize: '0.85rem' }}>Start new targets, read books, or practice habits to track them here!</p>
+                </div>
+              ) : (
+                <>
+                  {inProgressTargets.length > 0 && (
+                    <div>
+                      <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--accent-primary)', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.25rem', marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Targets ({inProgressTargets.length})</span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-muted)' }}>Click title to view tab</span>
+                      </h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                        {inProgressTargets.map(t => (
+                          <div
+                            key={t.id}
+                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}
+                          >
+                            <span
+                              style={{ fontWeight: 500, fontSize: '0.875rem', cursor: 'pointer', flex: 1 }}
+                              onClick={() => { setIsRunningModalOpen(false); setActiveTab('targets'); }}
+                              title="Go to Targets tab"
+                            >
+                              {t.title} <span style={{ fontSize: '0.75rem', opacity: 0.5 }}>({t.type})</span>
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <select
+                                value={t.status}
+                                onChange={async (e) => {
+                                  await onAction('update', { ...t, status: e.target.value }, 'targets');
+                                }}
+                                style={{
+                                  background: '#1f2937',
+                                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                                  color: '#ffffff',
+                                  borderRadius: '6px',
+                                  fontSize: '0.75rem',
+                                  padding: '0.2rem 0.4rem',
+                                  outline: 'none',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <option value="in_progress" style={{ background: '#1f2937', color: '#ffffff' }}>In Progress</option>
+                                <option value="paused" style={{ background: '#1f2937', color: '#ffffff' }}>Paused</option>
+                                <option value="completed" style={{ background: '#1f2937', color: '#ffffff' }}>Completed</option>
+                                <option value="incomplete" style={{ background: '#1f2937', color: '#ffffff' }}>Incomplete</option>
+                              </select>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {inProgressPersonality.length > 0 && (
+                    <div>
+                      <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#f59e0b', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.25rem', marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Personality & Habits ({inProgressPersonality.length})</span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-muted)' }}>Click title to view tab</span>
+                      </h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                        {inProgressPersonality.map(p => (
+                          <div
+                            key={p.id}
+                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}
+                          >
+                            <span
+                              style={{ fontWeight: 500, fontSize: '0.875rem', cursor: 'pointer', flex: 1 }}
+                              onClick={() => { setIsRunningModalOpen(false); setActiveTab('personality'); }}
+                              title="Go to Personality tab"
+                            >
+                              {p.title} <span className={`badge ${p.color === 'red' ? 'badge-bad' : 'badge-good'}`} style={{ fontSize: '0.7rem', padding: '0.1rem 0.4rem', marginLeft: '0.5rem' }}>
+                                {p.type === 'habits' ? 'Habit' : p.type === 'body_language' ? 'Body Lang.' : p.type === 'communication' ? 'Comms' : p.type === 'clothing' ? 'Clothing' : 'Fitness'}
+                              </span>
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <select
+                                value={p.status}
+                                onChange={async (e) => {
+                                  await onAction('update', { ...p, status: e.target.value }, 'personality');
+                                }}
+                                style={{
+                                  background: '#1f2937',
+                                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                                  color: '#ffffff',
+                                  borderRadius: '6px',
+                                  fontSize: '0.75rem',
+                                  padding: '0.2rem 0.4rem',
+                                  outline: 'none',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <option value="in_progress" style={{ background: '#1f2937', color: '#ffffff' }}>In Progress</option>
+                                <option value="paused" style={{ background: '#1f2937', color: '#ffffff' }}>Paused</option>
+                                <option value="completed" style={{ background: '#1f2937', color: '#ffffff' }}>Completed</option>
+                                <option value="incomplete" style={{ background: '#1f2937', color: '#ffffff' }}>Incomplete</option>
+                              </select>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {inProgressBooks.length > 0 && (
+                    <div>
+                      <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#ec4899', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.25rem', marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Books In Progress ({inProgressBooks.length})</span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-muted)' }}>Click title to view tab</span>
+                      </h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                        {inProgressBooks.map(b => (
+                          <div
+                            key={b.id}
+                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}
+                          >
+                            <span
+                              style={{ fontWeight: 500, fontSize: '0.875rem', cursor: 'pointer', flex: 1 }}
+                              onClick={() => { setIsRunningModalOpen(false); setActiveTab('books'); }}
+                              title="Go to Books tab"
+                            >
+                              {b.title} <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 400 }}>by {b.author}</span>
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <select
+                                value={b.status}
+                                onChange={async (e) => {
+                                  await onAction('update', { ...b, status: e.target.value }, 'books');
+                                }}
+                                style={{
+                                  background: '#1f2937',
+                                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                                  color: '#ffffff',
+                                  borderRadius: '6px',
+                                  fontSize: '0.75rem',
+                                  padding: '0.2rem 0.4rem',
+                                  outline: 'none',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <option value="in_progress" style={{ background: '#1f2937', color: '#ffffff' }}>Reading</option>
+                                <option value="paused" style={{ background: '#1f2937', color: '#ffffff' }}>Paused</option>
+                                <option value="completed" style={{ background: '#1f2937', color: '#ffffff' }}>Completed</option>
+                                <option value="incomplete" style={{ background: '#1f2937', color: '#ffffff' }}>Incomplete</option>
+                              </select>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {inProgressDiary.length > 0 && (
+                    <div>
+                      <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#10b981', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.25rem', marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Diary Drafts ({inProgressDiary.length})</span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-muted)' }}>Click title to view tab</span>
+                      </h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                        {inProgressDiary.map(d => (
+                          <div
+                            key={d.id}
+                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.05)' }}
+                          >
+                            <span
+                              style={{ fontWeight: 500, fontSize: '0.875rem', cursor: 'pointer', flex: 1 }}
+                              onClick={() => { setIsRunningModalOpen(false); setActiveTab('diary'); }}
+                              title="Go to Diary tab"
+                            >
+                              {d.title} <span style={{ fontSize: '0.75rem', opacity: 0.5 }}>({d.date})</span>
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <select
+                                value={d.status}
+                                onChange={async (e) => {
+                                  await onAction('update', { ...d, status: e.target.value }, 'diary');
+                                }}
+                                style={{
+                                  background: '#1f2937',
+                                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                                  color: '#ffffff',
+                                  borderRadius: '6px',
+                                  fontSize: '0.75rem',
+                                  padding: '0.2rem 0.4rem',
+                                  outline: 'none',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <option value="in_progress" style={{ background: '#1f2937', color: '#ffffff' }}>Draft</option>
+                                <option value="paused" style={{ background: '#1f2937', color: '#ffffff' }}>Paused</option>
+                                <option value="completed" style={{ background: '#1f2937', color: '#ffffff' }}>Finalized</option>
+                                <option value="incomplete" style={{ background: '#1f2937', color: '#ffffff' }}>Incomplete</option>
+                              </select>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="form-actions" style={{ marginTop: '1.5rem', marginBottom: 0 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ width: 'auto' }}
+                onClick={() => setIsRunningModalOpen(false)}
+              >
+                Close View
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

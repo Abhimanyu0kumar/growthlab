@@ -28,6 +28,7 @@ export interface PersonalityItem {
   title: string;
   description: string;
   status: 'in_progress' | 'paused' | 'completed' | 'incomplete';
+  color: 'green' | 'red';
   createdAt: string;
   updatedAt: string;
 }
@@ -116,6 +117,7 @@ export async function readDb(): Promise<DatabaseSchema> {
       title: row.title,
       description: row.description,
       status: row.status,
+      color: row.color || 'green',
       createdAt: normalizeDateValue(row.createdAt),
       updatedAt: normalizeDateValue(row.updatedAt),
     })),
@@ -164,8 +166,8 @@ export async function writeDb(schema: DatabaseSchema): Promise<void> {
 
     for (const personality of schema.personality || []) {
       await connection.query(
-        'INSERT INTO personality (id, type, title, description, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [personality.id, personality.type, personality.title, personality.description, personality.status, personality.createdAt, personality.updatedAt]
+        'INSERT INTO personality (id, type, title, description, status, color, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [personality.id, personality.type, personality.title, personality.description, personality.status, personality.color || 'green', personality.createdAt, personality.updatedAt]
       );
     }
 

@@ -88,6 +88,7 @@ export async function POST(request: Request) {
           title: item.title || 'Untitled Focused Trait',
           description: item.description || '',
           status: item.status || 'in_progress',
+          color: item.color || 'green',
           createdAt: item.createdAt || now,
           updatedAt: now
         };
@@ -104,6 +105,7 @@ export async function POST(request: Request) {
           description: item.description !== undefined ? item.description : db.personality[index].description,
           status: item.status !== undefined ? item.status : db.personality[index].status,
           type: item.type !== undefined ? item.type : db.personality[index].type,
+          color: item.color !== undefined ? item.color : db.personality[index].color,
           createdAt: item.createdAt !== undefined ? item.createdAt : db.personality[index].createdAt,
           updatedAt: now
         };
