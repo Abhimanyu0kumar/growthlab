@@ -13,6 +13,7 @@ export default function Diary({ diary = [], onAction }: DiaryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
+  const [deleteConfirmItem, setDeleteConfirmItem] = useState<{ id: string; title: string } | null>(null);
   
   // Filter States
   const [statusFilter, setStatusFilter] = useState('');
@@ -123,10 +124,8 @@ export default function Diary({ diary = [], onAction }: DiaryProps) {
     setIsModalOpen(false);
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this diary entry?')) {
-      await onAction('delete', { id });
-    }
+  const handleDelete = (id: string, title: string) => {
+    setDeleteConfirmItem({ id, title });
   };
 
   const getStatusLabel = (s: string) => {
@@ -158,7 +157,7 @@ export default function Diary({ diary = [], onAction }: DiaryProps) {
         <button
           type="button"
           className="card-hover-btn btn-danger"
-          onClick={() => handleDelete(entry.id)}
+          onClick={() => handleDelete(entry.id, entry.title)}
           title="Delete Entry"
         >
           <Trash2 size={13} />
@@ -473,6 +472,40 @@ export default function Diary({ diary = [], onAction }: DiaryProps) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {deleteConfirmItem && (
+        <div className="modal-overlay" onClick={() => setDeleteConfirmItem(null)}>
+          <div className="glass-panel modal-content" style={{ maxWidth: '400px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title" style={{ color: '#ef4444' }}>Confirm Deletion</h2>
+              <button className="modal-close-btn" onClick={() => setDeleteConfirmItem(null)}>&times;</button>
+            </div>
+            <div style={{ margin: '1rem 0', color: 'var(--text-primary)', fontSize: '0.9rem', lineHeight: '1.4' }}>
+              Are you sure you want to delete the diary entry <strong>{deleteConfirmItem.title}</strong>? This action is permanent and cannot be undone.
+            </div>
+            <div className="form-actions" style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem', marginBottom: 0 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setDeleteConfirmItem(null)}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn"
+                style={{ background: '#ef4444', borderColor: '#f87171', color: '#ffffff', flex: 1 }}
+                onClick={async () => {
+                  await onAction('delete', { id: deleteConfirmItem.id });
+                  setDeleteConfirmItem(null);
+                }}
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
