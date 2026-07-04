@@ -55,36 +55,61 @@ export default function Home() {
     diary: []
   });
 
-  // Background Image State
+  // Background Image & Appearance State
   const [bgImage, setBgImage] = useState<string | null>(null);
+  const [bgSizing, setBgSizing] = useState<'cover' | 'contain' | 'repeat'>('cover');
+  const [bgBlur, setBgBlur] = useState<number>(0);
+  const [bgBrightness, setBgBrightness] = useState<number>(60);
 
-  // Apply bgImage updates to document.body style
+  // Apply bgImage updates from DB and localStorage
   useEffect(() => {
     getBgImageDb().then((saved) => {
       if (saved) {
         setBgImage(saved);
-        document.body.style.backgroundImage = `url(${saved})`;
-        document.body.style.backgroundSize = 'cover';
-        document.body.style.backgroundAttachment = 'fixed';
-        document.body.style.backgroundPosition = 'center';
       }
     });
+
+    const savedAppearance = localStorage.getItem('app-bg-appearance');
+    if (savedAppearance) {
+      try {
+        const parsed = JSON.parse(savedAppearance);
+        if (parsed.sizing) setBgSizing(parsed.sizing);
+        if (typeof parsed.blur === 'number') setBgBlur(parsed.blur);
+        if (typeof parsed.brightness === 'number') setBgBrightness(parsed.brightness);
+      } catch (e) {
+        console.error('Failed to parse background appearance:', e);
+      }
+    }
   }, []);
 
   const handleUpdateBgImage = async (image: string | null) => {
     setBgImage(image);
     await setBgImageDb(image);
-    if (image) {
-      document.body.style.backgroundImage = `url(${image})`;
-      document.body.style.backgroundSize = 'cover';
-      document.body.style.backgroundAttachment = 'fixed';
-      document.body.style.backgroundPosition = 'center';
-    } else {
-      document.body.style.backgroundImage = '';
-      document.body.style.backgroundSize = '';
-      document.body.style.backgroundAttachment = '';
-      document.body.style.backgroundPosition = '';
+  };
+
+  const handleUpdateAppearance = (updates: { sizing?: 'cover' | 'contain' | 'repeat'; blur?: number; brightness?: number }) => {
+    let nextSizing = bgSizing;
+    let nextBlur = bgBlur;
+    let nextBrightness = bgBrightness;
+
+    if (updates.sizing) {
+      nextSizing = updates.sizing;
+      setBgSizing(updates.sizing);
     }
+    if (typeof updates.blur === 'number') {
+      nextBlur = updates.blur;
+      setBgBlur(updates.blur);
+    }
+    if (typeof updates.brightness === 'number') {
+      nextBrightness = updates.brightness;
+      setBgBrightness(updates.brightness);
+    }
+
+    localStorage.setItem('app-bg-appearance', JSON.stringify({
+      sizing: nextSizing,
+      blur: nextBlur,
+      brightness: nextBrightness
+    }));
   };
 
   // Verify Auth on mount
@@ -521,6 +546,22 @@ export default function Home() {
   // Render main app layout
   return (
     <div className="app-container">
+      {bgImage && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundImage: `url(${bgImage})`,
+            backgroundSize: bgSizing,
+            backgroundRepeat: bgSizing === 'repeat' ? 'repeat' : 'no-repeat',
+            backgroundPosition: 'center',
+            filter: `blur(${bgBlur}px) brightness(${bgBrightness}%)`,
+            zIndex: -1,
+            pointerEvents: 'none',
+            transition: 'filter 0.15s ease'
+          }}
+        />
+      )}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -576,6 +617,10 @@ export default function Home() {
             onUpdateProfile={handleUpdateProfile}
             bgImage={bgImage}
             onUpdateBgImage={handleUpdateBgImage}
+            bgSizing={bgSizing}
+            bgBlur={bgBlur}
+            bgBrightness={bgBrightness}
+            onUpdateAppearance={handleUpdateAppearance}
           />
         )}
       </main>

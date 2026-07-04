@@ -8,9 +8,22 @@ interface SettingsProps {
   onUpdateProfile: (data: { currentPassword: string; newPassword?: string; newEmail?: string }) => Promise<{ success: boolean; error?: string }>;
   bgImage: string | null;
   onUpdateBgImage: (image: string | null) => void;
+  bgSizing: 'cover' | 'contain' | 'repeat';
+  bgBlur: number;
+  bgBrightness: number;
+  onUpdateAppearance: (updates: { sizing?: 'cover' | 'contain' | 'repeat'; blur?: number; brightness?: number }) => void;
 }
 
-export default function Settings({ email, onUpdateProfile, bgImage, onUpdateBgImage }: SettingsProps) {
+export default function Settings({ 
+  email, 
+  onUpdateProfile, 
+  bgImage, 
+  onUpdateBgImage,
+  bgSizing,
+  bgBlur,
+  bgBrightness,
+  onUpdateAppearance
+}: SettingsProps) {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -250,6 +263,74 @@ export default function Settings({ email, onUpdateProfile, bgImage, onUpdateBgIm
                     </span>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Sizing Selector */}
+            <div className="settings-row" style={{ marginTop: '1.5rem' }}>
+              <div className="settings-label-col">
+                <span className="settings-label">Image Sizing</span>
+                <span className="settings-desc">Choose how the background image fits or repeats on screen.</span>
+              </div>
+              <div>
+                <select
+                  value={bgSizing}
+                  onChange={(e) => onUpdateAppearance({ sizing: e.target.value as any })}
+                  style={{
+                    background: '#1f2937',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#ffffff',
+                    borderRadius: '6px',
+                    fontSize: '0.85rem',
+                    padding: '0.4rem 0.8rem',
+                    outline: 'none',
+                    cursor: 'pointer',
+                    width: '100%',
+                    maxWidth: '200px'
+                  }}
+                >
+                  <option value="cover">Cover (Stretch)</option>
+                  <option value="contain">Contain (Fit)</option>
+                  <option value="repeat">Tile (Repeat)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Blur Slider */}
+            <div className="settings-row" style={{ marginTop: '1.5rem' }}>
+              <div className="settings-label-col">
+                <span className="settings-label">Background Blur ({bgBlur}px)</span>
+                <span className="settings-desc">Apply blur filters to create a smooth glass effect.</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', width: '100%', maxWidth: '300px' }}>
+                <input
+                  type="range"
+                  min="0"
+                  max="20"
+                  value={bgBlur}
+                  onChange={(e) => onUpdateAppearance({ blur: parseInt(e.target.value) })}
+                  style={{ flex: 1, cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)' }}>{bgBlur}px</span>
+              </div>
+            </div>
+
+            {/* Brightness Slider */}
+            <div className="settings-row" style={{ marginTop: '1.5rem' }}>
+              <div className="settings-label-col">
+                <span className="settings-label">Background Brightness ({bgBrightness}%)</span>
+                <span className="settings-desc">Dim the image to maintain readable text contrast.</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', width: '100%', maxWidth: '300px' }}>
+                <input
+                  type="range"
+                  min="10"
+                  max="100"
+                  value={bgBrightness}
+                  onChange={(e) => onUpdateAppearance({ brightness: parseInt(e.target.value) })}
+                  style={{ flex: 1, cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)' }}>{bgBrightness}%</span>
               </div>
             </div>
 
