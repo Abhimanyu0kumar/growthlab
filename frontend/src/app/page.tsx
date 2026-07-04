@@ -9,6 +9,7 @@ import Personality from '@/components/Personality';
 import Books from '@/components/Books';
 import Diary from '@/components/Diary';
 import Settings from '@/components/Settings';
+import { getBgImageDb, setBgImageDb } from '@/lib/idb';
 
 export default function Home() {
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
@@ -59,26 +60,26 @@ export default function Home() {
 
   // Apply bgImage updates to document.body style
   useEffect(() => {
-    const saved = localStorage.getItem('app-bg-image');
-    if (saved) {
-      setBgImage(saved);
-      document.body.style.backgroundImage = `url(${saved})`;
-      document.body.style.backgroundSize = 'cover';
-      document.body.style.backgroundAttachment = 'fixed';
-      document.body.style.backgroundPosition = 'center';
-    }
+    getBgImageDb().then((saved) => {
+      if (saved) {
+        setBgImage(saved);
+        document.body.style.backgroundImage = `url(${saved})`;
+        document.body.style.backgroundSize = 'cover';
+        document.body.style.backgroundAttachment = 'fixed';
+        document.body.style.backgroundPosition = 'center';
+      }
+    });
   }, []);
 
-  const handleUpdateBgImage = (image: string | null) => {
+  const handleUpdateBgImage = async (image: string | null) => {
     setBgImage(image);
+    await setBgImageDb(image);
     if (image) {
-      localStorage.setItem('app-bg-image', image);
       document.body.style.backgroundImage = `url(${image})`;
       document.body.style.backgroundSize = 'cover';
       document.body.style.backgroundAttachment = 'fixed';
       document.body.style.backgroundPosition = 'center';
     } else {
-      localStorage.removeItem('app-bg-image');
       document.body.style.backgroundImage = '';
       document.body.style.backgroundSize = '';
       document.body.style.backgroundAttachment = '';

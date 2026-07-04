@@ -287,7 +287,7 @@ export default function Settings({ email, onUpdateProfile, bgImage, onUpdateBgIm
             <div className="settings-row" style={{ marginTop: '1.5rem' }}>
               <div className="settings-label-col">
                 <span className="settings-label">Upload Custom Image</span>
-                <span className="settings-desc">Select a local image file from your device (Max 1.5MB).</span>
+                <span className="settings-desc">Select a local image file from your device (Max 75MB).</span>
               </div>
               <div>
                 <input 
@@ -296,8 +296,8 @@ export default function Settings({ email, onUpdateProfile, bgImage, onUpdateBgIm
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    if (file.size > 1500 * 1024) {
-                      alert('Please choose an image smaller than 1.5MB to ensure it fits in browser storage.');
+                    if (file.size > 75 * 1024 * 1024) {
+                      alert('Please choose an image smaller than 75MB.');
                       return;
                     }
                     const reader = new FileReader();
